@@ -10,7 +10,7 @@ SQL 在线判题系统（SQL Online Judge）的后端代码，基于 Django + Dj
 
 - **学生端**：练习 SQL 题目、参加考试、提交 SQL 代码、查看成绩排名
 - **教师端**：创建/管理题目、组织考试、查看学生成绩统计
-- **判题引擎**：Docker 沙箱执行学生提交的 SQL（队友负责）
+- **判题引擎**：Docker 沙箱执行学生提交的 SQL ✅ 已完成
 
 ---
 
@@ -32,6 +32,7 @@ SQL 在线判题系统（SQL Online Judge）的后端代码，基于 Django + Dj
 - ✅ 修改题目（同步更新答案和测试用例）
 - ✅ 删除题目（级联删除关联的答案和测试用例）
 - ✅ 难度分级：Easy / Medium / Hard
+- ✅ 批量导入：预置了 10 道上机课习题（含建表 SQL 和标准答案），一键导入数据库
 
 ### 2.3 考试管理
 - ✅ 教师创建考试（设定开始/结束时间、总分、题目分配）
@@ -41,7 +42,7 @@ SQL 在线判题系统（SQL Online Judge）的后端代码，基于 Django + Dj
 
 ### 2.4 提交与判题
 - ✅ 学生提交 SQL 代码
-- ✅ 判题服务对接（当前为 Mock 版本，等队友的 Docker 判题引擎开发好后替换）
+- ✅ 判题服务对接已完成（FastAPI + Docker + PostgreSQL，真实执行 SQL 并比对结果）
 - ✅ 提交历史查询（学生只看自己的，教师看名下学生的）
 - ✅ 考试模式下自动校验时间
 
@@ -64,6 +65,15 @@ SQL 在线判题系统（SQL Online Judge）的后端代码，基于 Django + Dj
 | django-filter 25.2 | API 筛选/搜索支持 |
 | MySQL 8.x | 关系型数据库 |
 
+### 判题服务（独立微服务）
+
+| 技术 | 说明 |
+|------|------|
+| FastAPI | 判题服务 Web 框架 |
+| Docker | 启动临时 PostgreSQL 容器作为沙箱 |
+| PostgreSQL 15 | 沙箱数据库（每个提交独立容器） |
+| psycopg2 | Python 连接 PostgreSQL |
+
 ---
 
 ## 四、项目目录结构
@@ -71,7 +81,7 @@ SQL 在线判题系统（SQL Online Judge）的后端代码，基于 Django + Dj
 ```
 sql_oj/
 ├── manage.py                  # Django 管理入口
-├── requirements.txt           # 依赖列表
+├── requirements.txt           # 业务后端依赖列表
 ├── .gitignore                 # Git 忽略规则
 ├── README.md                  # 本文件
 │
@@ -80,34 +90,45 @@ sql_oj/
 │   ├── urls.py                # 根路由（API 网关，所有接口入口）
 │   └── wsgi.py                # WSGI 入口
 │
-└── apps/                      # 业务模块目录
-    ├── users/                 # 用户管理模块
-    │   ├── models.py          # 用户数据模型
-    │   ├── serializers.py     # 序列化器（注册、用户信息）
-    │   ├── views.py           # 视图（注册、个人信息、用户列表）
-    │   ├── permissions.py     # 权限类（教师权限、管理员权限）
-    │   ├── urls.py            # 用户管理路由
-    │   └── urls_auth.py       # 认证相关路由（注册/登录/刷新）
-    │
-    ├── questions/             # 题目管理模块
-    │   ├── models.py          # 题目、答案、测试用例模型
-    │   ├── serializers.py     # 序列化器（支持嵌套创建）
-    │   ├── views.py           # 视图（CRUD + 批量创建答案/用例）
-    │   └── urls.py            # 题目管理路由
-    │
-    ├── exams/                 # 考试管理模块
-    │   ├── models.py          # 考试、考试题目关联模型
-    │   ├── serializers.py     # 序列化器
-    │   ├── views.py           # 视图（CRUD + 时间校验 + 排名）
-    │   └── urls.py            # 考试管理路由
-    │
-    └── submissions/           # 提交判题模块
-        ├── models.py          # 提交记录模型
-        ├── serializers.py     # 序列化器
-        ├── views.py           # 视图（提交 SQL + 统计分析）
-        ├── judge.py           # 判题服务对接（当前为 Mock）
-        ├── urls.py            # 提交记录路由
-        └── urls_stats.py      # 统计分析路由
+├── apps/                      # 业务模块目录
+│   ├── users/                 # 用户管理模块
+│   │   ├── models.py          # 用户数据模型
+│   │   ├── serializers.py     # 序列化器（注册、用户信息）
+│   │   ├── views.py           # 视图（注册、个人信息、用户列表）
+│   │   ├── permissions.py     # 权限类（教师权限、管理员权限）
+│   │   ├── urls.py            # 用户管理路由
+│   │   └── urls_auth.py       # 认证相关路由（注册/登录/刷新）
+│   │
+│   ├── questions/             # 题目管理模块
+│   │   ├── models.py          # 题目、答案、测试用例模型
+│   │   ├── serializers.py     # 序列化器（支持嵌套创建）
+│   │   ├── views.py           # 视图（CRUD + 批量创建答案/用例）
+│   │   ├── urls.py            # 题目管理路由
+│   │   └── management/        # Django 管理命令
+│   │       └── commands/
+│   │           └── import_exercises.py   # 批量导入 10 道上机课题目的命令
+│   │
+│   ├── exams/                 # 考试管理模块
+│   │   ├── models.py          # 考试、考试题目关联模型
+│   │   ├── serializers.py     # 序列化器
+│   │   ├── views.py           # 视图（CRUD + 时间校验 + 排名）
+│   │   └── urls.py            # 考试管理路由
+│   │
+│   └── submissions/           # 提交判题模块
+│       ├── models.py          # 提交记录模型
+│       ├── serializers.py     # 序列化器
+│       ├── views.py           # 视图（提交 SQL + 统计分析）
+│       ├── judge.py           # 判题服务对接（调用判题微服务）
+│       ├── urls.py            # 提交记录路由
+│       └── urls_stats.py      # 统计分析路由
+│
+├── judge_service/             # 判题引擎（独立微服务）
+│   ├── judge_service.py       # 判题主程序（FastAPI，端口 8080）
+│   ├── requirements_judge.txt # 判题服务依赖
+│   └── start_judge.bat        # Windows 一键启动脚本
+│
+└── docs/                      # 文档
+    └── judge_api.md           # 判题服务 API 详细文档
 ```
 
 ---
@@ -186,7 +207,37 @@ python manage.py migrate
 
 看到一堆 "OK" 就说明成功了。
 
-### 5.5 启动后端服务
+### 5.5 启动判题服务 ⚠️ 重要
+
+**判题服务必须单独启动**，否则提交 SQL 时会失败。
+
+前置条件：需要安装 **Docker Desktop**（https://www.docker.com/products/docker-desktop/）
+
+```powershell
+# 1. 进入判题服务目录
+cd judge_service
+
+# 2. 安装判题服务依赖
+pip install -r requirements_judge.txt
+
+# 3. 启动判题服务（新开一个终端窗口）
+python judge_service.py
+# 或双击 start_judge.bat
+```
+
+看到以下输出说明判题服务启动成功：
+```
+INFO:     Uvicorn running on http://0.0.0.0:8080
+```
+
+验证判题服务是否正常：
+```powershell
+# 在另一个终端里执行
+curl http://localhost:8080/health
+# 返回 {"status":"ok"} 即正常
+```
+
+### 5.6 启动后端服务
 
 ```powershell
 python manage.py runserver
@@ -200,7 +251,9 @@ Starting development server at http://127.0.0.1:8000/
 
 现在你可以用浏览器访问 `http://127.0.0.1:8000/api/` 查看所有可用的 API 接口（DRF 自带的浏览界面）。
 
-### 5.6 测试一下接口
+> ⚠️ 注意：后端和判题服务**需要同时运行**（两个终端窗口），否则提交 SQL 会报错。
+
+### 5.7 测试一下接口
 
 用 **Postman**（https://www.postman.com/downloads/）或浏览器的开发者工具测试：
 
@@ -351,59 +404,37 @@ Authorization: Bearer <token>
 
 ---
 
-## 七、给负责判题引擎的队友（重要）
+## 七、判题引擎（已完成 ✅）
 
-### 你需要修改的文件
+### 架构说明
 
-只需要改一个文件：**`apps/submissions/judge.py`**
+判题引擎是一个**独立的微服务**，代码在 `judge_service/` 目录下。
 
-### 当前状态
+**工作流程：**
+1. 学生通过业务后端提交 SQL
+2. 业务后端调用判题服务（`POST http://localhost:8080/judge`）
+3. 判题服务用 Docker 启动一个临时 PostgreSQL 容器
+4. 执行建表语句 → 插入测试数据 → 执行学生 SQL → 比对结果
+5. 返回判题结果，销毁临时容器
 
-目前 `judge.py` 是一个 **Mock（模拟）版本**。无论学生提交什么 SQL，它都直接返回"通过"（`ACCEPTED`，100 分）。
+**安全机制：**
+- 容器隔离：每个提交独立容器，执行完立即销毁
+- 资源限制：内存 512MB、CPU 配额限制
+- SQL 超时：30 秒超时自动中断
+- 权限裁剪：移除 SYS_ADMIN、NET_RAW 等高危权限
+- 事务回滚：每个测试用例独立会话，执行后回滚
 
-### 你需要做的事
+### 修改判题服务地址
 
-把这个函数改成**真实调用你的 Docker 判题服务**：
+如果判题服务不在本机，或端口不同，修改 `apps/submissions/judge.py` 第 4 行：
 
 ```python
-def judge_submission(submitted_sql, test_cases, create_table_sql=''):
-    """
-    参数说明：
-        submitted_sql   — 学生提交的 SQL 语句（字符串）
-        test_cases      — 测试用例列表，格式：
-            [
-                {"test_input": "...", "expected_output": "..."},
-                {"test_input": "...", "expected_output": "..."},
-            ]
-        create_table_sql — 建表语句（字符串，可能为空）
-
-    返回值格式（必须严格遵守）：
-        {
-            "passed": True / False,           # 是否通过
-            "execution_status": "ACCEPTED",   # 状态：ACCEPTED / WRONG_ANSWER / TIMEOUT / ERROR
-            "score": 100,                      # 得分（0-100）
-            "details": [
-                {
-                    "test_case_id": 1,        # 第几个测试用例
-                    "passed": True,            # 该用例是否通过
-                    "actual_output": "..."     # 实际输出
-                }
-            ]
-        }
-    """
-    # TODO: 在这里调用你的 Docker 判题服务
-    # 例如：
-    # import requests
-    # response = requests.post('http://localhost:8080/judge', json={...}, timeout=30)
-    # return response.json()
-    pass
+JUDGE_SERVICE_URL = "http://实际地址:实际端口/judge"
 ```
 
-**关键要求：**
-1. 超时时间建议设为 30 秒
-2. 返回值格式必须和上面一模一样，否则后端会报错
-3. Docker 判题服务需要能接收 POST 请求
-4. 你改了 `judge.py` 之后，后端不需要重启就能用（开发模式下自动重载）
+### 详细 API 文档
+
+判题服务的完整 API 文档见：[docs/judge_api.md](docs/judge_api.md)
 
 ---
 
@@ -462,7 +493,23 @@ def judge_submission(submitted_sql, test_cases, create_table_sql=''):
   ```
 - 功能完成后，在 GitHub 网页上发起 Pull Request 合并到 main
 
-### 9.5 常见问题
+### 9.5 批量导入上机课题目
+
+项目内置了 10 道上机课习题，建表 SQL 和标准答案都已经写好。导入方法：
+
+```powershell
+# 先注册一个教师账号（如果还没有）
+# POST /api/auth/register/ → {"username":"teacher","email":"t@t.com","password":"123456","user_type":"teacher"}
+
+# 执行导入（教师 ID 默认为 1）
+python manage.py import_exercises --teacher-id=1
+```
+
+成功后会输出每道题的导入信息，一共 10 道题（easy 4 道、medium 3 道、hard 3 道）。
+
+题目数据在：[apps/questions/management/commands/import_exercises.py](apps/questions/management/commands/import_exercises.py)
+
+### 9.6 常见问题
 
 **Q：运行 `python manage.py migrate` 报错 "Access denied for user"？**
 A：MySQL 密码没配对。检查 `settings.py` 里的 PASSWORD。
