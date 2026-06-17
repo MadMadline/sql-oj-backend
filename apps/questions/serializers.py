@@ -25,14 +25,14 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuestionStudentSerializer(serializers.ModelSerializer):
-    """学生视角：不暴露正确答案"""
+    """学生视角：不暴露正确答案和建表语句"""
     test_cases = TestCaseSerializer(many=True, read_only=True)
 
     class Meta:
         model = Question
         fields = (
             'id', 'title', 'description', 'difficulty', 'sample_input',
-            'sample_output', 'create_table_sql', 'teacher', 'created_at',
+            'sample_output', 'teacher', 'created_at',
             'test_cases',
         )
         read_only_fields = ('teacher', 'created_at')
