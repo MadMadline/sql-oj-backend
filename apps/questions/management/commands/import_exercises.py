@@ -1,11 +1,10 @@
 """
-导入上机课 10 道题目到数据库
+导入上机课 10 道题目到数据库（PostgreSQL 适配版）
 用法: python manage.py import_exercises [--teacher-id=1]
 """
 from django.core.management.base import BaseCommand
 from apps.questions.models import Question, Answer, TestCase
 from apps.users.models import User
-
 
 QUESTIONS = [
     {
@@ -34,7 +33,6 @@ QUESTIONS = [
             "若有多人并列最高，需全部返回。\n\n"
             "返回列：employee_id, name, net_income"
         ),
-        "title": "员工晋升",
         "difficulty": "medium",
         "create_table_sql": (
             "CREATE TABLE Employees (\n"
@@ -43,10 +41,10 @@ QUESTIONS = [
             "    role VARCHAR(50)\n"
             ");\n"
             "CREATE TABLE Incomes (\n"
-            "    id INT PRIMARY KEY AUTO_INCREMENT,\n"
+            "    id SERIAL PRIMARY KEY,\n"
             "    employee_id INT,\n"
             "    income_date DATE,\n"
-            "    income_type VARCHAR(50),\n"
+            "    income_type VARCHAR(50) CHECK (income_type IN ('Salary', 'Bonus', 'Fine')),\n"
             "    amount INT\n"
             ");"
         ),
@@ -95,14 +93,13 @@ QUESTIONS = [
             "AUC = 总得分 / (正负样本对数量)，结果保留 4 位小数。\n\n"
             "返回：auc"
         ),
-        "title": "计算模型 AUC",
         "difficulty": "easy",
         "create_table_sql": (
             "CREATE TABLE predictions (\n"
-            "    id INT PRIMARY KEY AUTO_INCREMENT,\n"
+            "    id SERIAL PRIMARY KEY,\n"
             "    user_id INT NOT NULL,\n"
             "    item_id INT NOT NULL,\n"
-            "    label TINYINT NOT NULL,\n"
+            "    label SMALLINT NOT NULL CHECK (label IN (0,1)),\n"
             "    score DECIMAL(10,4) NOT NULL\n"
             ");"
         ),
@@ -142,11 +139,10 @@ QUESTIONS = [
             "返回：user_id, third_tag, watch_days\n"
             "排序：user_id ASC, third_tag ASC"
         ),
-        "title": "观看天数统计",
         "difficulty": "easy",
         "create_table_sql": (
             "CREATE TABLE mid_third_tag_vv_vt_daily (\n"
-            "    id INT PRIMARY KEY AUTO_INCREMENT,\n"
+            "    id SERIAL PRIMARY KEY,\n"
             "    mid BIGINT NOT NULL,\n"
             "    third_tag VARCHAR(100) NOT NULL,\n"
             "    log_date DATE NOT NULL\n"
@@ -186,16 +182,15 @@ QUESTIONS = [
             "浮点数保留 6 位小数\n\n"
             "排序：active_group ASC, model_group ASC"
         ),
-        "title": "模型打分分布对比",
         "difficulty": "hard",
         "create_table_sql": (
             "CREATE TABLE model_scores (\n"
-            "    id INT PRIMARY KEY AUTO_INCREMENT,\n"
+            "    id SERIAL PRIMARY KEY,\n"
             "    user_id BIGINT NOT NULL,\n"
             "    av_id BIGINT NOT NULL,\n"
-            "    model_group VARCHAR(20) NOT NULL,\n"
+            "    model_group VARCHAR(20) NOT NULL CHECK (model_group IN ('base', 'exp')),\n"
             "    score DECIMAL(10,6) NOT NULL,\n"
-            "    active_level INT NOT NULL\n"
+            "    active_level INT NOT NULL CHECK (active_level BETWEEN 1 AND 10)\n"
             ");"
         ),
         "answers": [
@@ -265,7 +260,6 @@ QUESTIONS = [
             "返回：user_id, user_name\n"
             "排序：user_id ASC"
         ),
-        "title": "连续签到用户统计",
         "difficulty": "medium",
         "create_table_sql": (
             "CREATE TABLE Users (\n"
@@ -316,7 +310,6 @@ QUESTIONS = [
             "返回：department_name, employee_name, salary\n"
             "排序：department_name ASC, employee_name ASC"
         ),
-        "title": "部门内第二高薪员工",
         "difficulty": "medium",
         "create_table_sql": (
             "CREATE TABLE Departments (\n"
@@ -362,14 +355,13 @@ QUESTIONS = [
             "- 转化率保留 2 位小数\n\n"
             "排序：product_id ASC"
         ),
-        "title": "订单转化漏斗分析",
         "difficulty": "hard",
         "create_table_sql": (
             "CREATE TABLE Events (\n"
             "    user_id INT NOT NULL,\n"
             "    product_id INT NOT NULL,\n"
-            "    event_type VARCHAR(20) NOT NULL,\n"
-            "    event_time DATETIME NOT NULL\n"
+            "    event_type VARCHAR(20) NOT NULL CHECK (event_type IN ('visit','add_cart','pay')),\n"
+            "    event_time TIMESTAMP NOT NULL\n"
             ");"
         ),
         "answers": [
@@ -404,7 +396,6 @@ QUESTIONS = [
             "返回：user_id, user_name\n"
             "排序：user_id ASC"
         ),
-        "title": "连续三个月消费增长",
         "difficulty": "hard",
         "create_table_sql": (
             "CREATE TABLE Users (\n"
@@ -464,7 +455,6 @@ QUESTIONS = [
             "返回：post_id, author_name, reply_count, avg_likes\n"
             "排序：post_id ASC"
         ),
-        "title": "论坛热帖",
         "difficulty": "easy",
         "create_table_sql": (
             "CREATE TABLE Posts (\n"
@@ -506,15 +496,14 @@ QUESTIONS = [
             "返回：daily_heat, activity_date\n"
             "排序：daily_heat DESC"
         ),
-        "title": "社区活跃度",
         "difficulty": "easy",
         "create_table_sql": (
             "CREATE TABLE Activity (\n"
-            "    id INT PRIMARY KEY AUTO_INCREMENT,\n"
+            "    id SERIAL PRIMARY KEY,\n"
             "    user_id INT,\n"
             "    session_id INT,\n"
             "    activity_date DATE,\n"
-            "    activity_type ENUM('open_session', 'end_session', 'scroll_down', 'send_message')\n"
+            "    activity_type VARCHAR(50) CHECK (activity_type IN ('open_session', 'end_session', 'scroll_down', 'send_message'))\n"
             ");"
         ),
         "answers": [
@@ -533,7 +522,15 @@ QUESTIONS = [
                 "FROM Activity\n"
                 "WHERE activity_date BETWEEN '2019-06-28' AND '2019-07-27'\n"
                 "GROUP BY activity_date\n"
-                "HAVING daily_heat > 0\n"
+                "HAVING SUM(\n"
+                "        CASE activity_type\n"
+                "            WHEN 'open_session' THEN 1\n"
+                "            WHEN 'scroll_down' THEN 2\n"
+                "            WHEN 'send_message' THEN 5\n"
+                "            WHEN 'end_session' THEN 0\n"
+                "            ELSE 0\n"
+                "        END\n"
+                "    ) > 0\n"
                 "ORDER BY daily_heat DESC;"
             )}
         ],

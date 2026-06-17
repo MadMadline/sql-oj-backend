@@ -1,0 +1,5 @@
+{
+    "question_id": 5,
+    "exam_id": null,
+    "submitted_sql": "WITH cte AS (SELECT user_id, checkin_date, checkin_date - INTERVAL '1 day' * ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY checkin_date) AS grp FROM Checkins WHERE checkin_date BETWEEN '2025-04-01' AND '2025-04-07'), seq AS (SELECT user_id, grp, COUNT(*) AS consecutive_days FROM cte GROUP BY user_id, grp HAVING COUNT(*) >= 3) SELECT u.user_id, u.user_name FROM seq s JOIN Users u ON s.user_id = u.user_id ORDER BY u.user_id;"
+}

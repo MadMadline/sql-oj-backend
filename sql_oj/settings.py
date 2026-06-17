@@ -91,7 +91,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'sql_oj_db',
         'USER': 'root',
-        'PASSWORD': '123456', 
+        'PASSWORD': '061015', 
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {'charset': 'utf8mb4'},

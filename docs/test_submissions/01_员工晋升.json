@@ -1,0 +1,5 @@
+{
+    "question_id": 1,
+    "exam_id": null,
+    "submitted_sql": "WITH StaffIncome AS ( SELECT e.employee_id, e.name, SUM( CASE WHEN i.income_type IN ('Salary', 'Bonus') THEN i.amount WHEN i.income_type = 'Fine' THEN -i.amount ELSE 0 END ) AS net_income FROM Employees e JOIN Incomes i ON e.employee_id = i.employee_id WHERE e.role = 'Staff' AND i.income_date BETWEEN '2023-01-01' AND '2023-06-30' GROUP BY e.employee_id, e.name ) SELECT employee_id, name, net_income FROM StaffIncome WHERE net_income = (SELECT MAX(net_income) FROM StaffIncome);"
+}

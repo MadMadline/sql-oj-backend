@@ -1,0 +1,5 @@
+{
+    "question_id": 2,
+    "exam_id": null,
+    "submitted_sql": "SELECT ROUND( SUM( CASE WHEN p.score > n.score THEN 1 WHEN p.score = n.score THEN 0.5 ELSE 0 END ) / COUNT(*), 4 ) AS auc FROM predictions p JOIN predictions n ON p.label = 1 AND n.label = 0;"
+}

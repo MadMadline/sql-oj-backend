@@ -1,0 +1,5 @@
+{
+    "question_id": 9,
+    "exam_id": null,
+    "submitted_sql": "SELECT p1.post_id, p1.author_name, COUNT(p2.post_id) AS reply_count, ROUND(AVG(p2.likes)) AS avg_likes FROM Posts p1 JOIN Posts p2 ON p1.post_id = p2.reply_to WHERE p1.reply_to IS NULL GROUP BY p1.post_id, p1.author_name ORDER BY p1.post_id;"
+}

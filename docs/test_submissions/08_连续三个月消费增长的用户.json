@@ -1,0 +1,5 @@
+{
+    "question_id": 8,
+    "exam_id": null,
+    "submitted_sql": "WITH monthly AS (SELECT user_id, DATE_TRUNC('month', order_date) AS month_start, SUM(amount) AS total_amount FROM Orders GROUP BY user_id, DATE_TRUNC('month', order_date)), seq AS (SELECT user_id, month_start, total_amount, LEAD(month_start, 1) OVER w AS next_month, LEAD(month_start, 2) OVER w AS next_2_month, LEAD(total_amount, 1) OVER w AS next_amount, LEAD(total_amount, 2) OVER w AS next_2_amount FROM monthly WINDOW w AS (PARTITION BY user_id ORDER BY month_start)) SELECT DISTINCT u.user_id, u.user_name FROM seq s JOIN Users u ON s.user_id = u.user_id WHERE (EXTRACT(YEAR FROM next_month) * 12 + EXTRACT(MONTH FROM next_month)) - (EXTRACT(YEAR FROM s.month_start) * 12 + EXTRACT(MONTH FROM s.month_start)) = 1 AND (EXTRACT(YEAR FROM next_2_month) * 12 + EXTRACT(MONTH FROM next_2_month)) - (EXTRACT(YEAR FROM next_month) * 12 + EXTRACT(MONTH FROM next_month)) = 1 AND total_amount < next_amount AND next_amount < next_2_amount ORDER BY u.user_id;"
+}

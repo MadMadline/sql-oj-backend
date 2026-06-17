@@ -1,0 +1,5 @@
+{
+    "question_id": 10,
+    "exam_id": null,
+    "submitted_sql": "SELECT activity_date, SUM( CASE activity_type WHEN 'open_session' THEN 1 WHEN 'scroll_down' THEN 2 WHEN 'send_message' THEN 5 WHEN 'end_session' THEN 0 ELSE 0 END ) AS daily_heat FROM Activity WHERE activity_date BETWEEN '2019-06-28' AND '2019-07-27' GROUP BY activity_date HAVING SUM( CASE activity_type WHEN 'open_session' THEN 1 WHEN 'scroll_down' THEN 2 WHEN 'send_message' THEN 5 WHEN 'end_session' THEN 0 ELSE 0 END ) > 0 ORDER BY daily_heat DESC;"
+}

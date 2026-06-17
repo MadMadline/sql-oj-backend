@@ -1,0 +1,5 @@
+{
+    "question_id": 3,
+    "exam_id": null,
+    "submitted_sql": "SELECT mid AS user_id, third_tag, COUNT(DISTINCT log_date) AS watch_days FROM mid_third_tag_vv_vt_daily WHERE log_date >= '2023-07-01' AND log_date < '2023-07-15' GROUP BY mid, third_tag ORDER BY user_id, third_tag;"
+}

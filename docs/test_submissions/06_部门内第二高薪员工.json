@@ -1,0 +1,5 @@
+{
+    "question_id": 6,
+    "exam_id": null,
+    "submitted_sql": "WITH ranked AS (SELECT e.employee_name, e.department_id, e.salary, DENSE_RANK() OVER (PARTITION BY e.department_id ORDER BY e.salary DESC) AS rk FROM Employees e) SELECT d.department_name, r.employee_name, r.salary FROM ranked r JOIN Departments d ON r.department_id = d.department_id WHERE r.rk = 2 ORDER BY d.department_name, r.employee_name;"
+}

@@ -1,0 +1,5 @@
+{
+    "question_id": 7,
+    "exam_id": null,
+    "submitted_sql": "WITH summary AS (SELECT product_id, COUNT(DISTINCT CASE WHEN event_type = 'visit' THEN user_id END) AS visit_users, COUNT(DISTINCT CASE WHEN event_type = 'add_cart' THEN user_id END) AS add_cart_users, COUNT(DISTINCT CASE WHEN event_type = 'pay' THEN user_id END) AS pay_users FROM Events GROUP BY product_id) SELECT product_id, visit_users, add_cart_users, pay_users, ROUND(CASE WHEN visit_users = 0 THEN 0 ELSE add_cart_users::decimal / visit_users END, 2) AS visit_to_cart_rate, ROUND(CASE WHEN add_cart_users = 0 THEN 0 ELSE pay_users::decimal / add_cart_users END, 2) AS cart_to_pay_rate FROM summary ORDER BY product_id;"
+}
