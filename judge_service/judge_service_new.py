@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
-from collections import Counter
 from psycopg2.errors import QueryCanceled
 from contextlib import closing
 
@@ -13,16 +12,16 @@ DOCKER_IMAGE = "postgres:15-alpine"
 DB_NAME = "judge_db"
 DB_USER = "judge_user"
 DB_PASSWORD = "judge_pass"
-CONTAINER_TIMEOUT = 30           
-SQL_TIMEOUT = 30                 
-MEM_LIMIT = "512m"               
+CONTAINER_TIMEOUT = 60            # 适当加长，以防首次镜像解压慢
+SQL_TIMEOUT = 30
+MEM_LIMIT = "512m"
 
-app = FastAPI(title="SQL Judge Service", version="1.0.0")
+app = FastAPI(title="SQL Judge Service", version="2.0.0")
 docker_client = docker.from_env()
 
 class TestCase(BaseModel):
-    expected_output: str          
-    test_input: Optional[str] = ""   
+    expected_output: str
+    test_input: Optional[str] = ""
 
 class JudgeRequest(BaseModel):
     submitted_sql: str
@@ -38,7 +37,7 @@ class TestCaseResult(BaseModel):
 
 class JudgeResponse(BaseModel):
     passed: bool
-    execution_status: str        
+    execution_status: str
     score: int
     details: List[TestCaseResult]
 
@@ -70,6 +69,7 @@ def compare_result_sets(actual: Dict, expected: Dict) -> bool:
     expected_cols = expected.get("columns", [])
     expected_rows = expected.get("rows", [])
 
+    # 都是空结果集
     if not actual_cols and not expected_cols:
         return True
 
@@ -95,29 +95,37 @@ def compare_result_sets(actual: Dict, expected: Dict) -> bool:
 
     return sorted(actual_processed) == sorted(expected_processed)
 
+
 def wait_for_db(container, timeout=CONTAINER_TIMEOUT):
+    """等待容器启动并返回 (host, port)"""
     start = time.time()
     while time.time() - start < timeout:
         container.reload()
-        ip = container.attrs['NetworkSettings']['IPAddress']
-        if not ip:
+        ports = container.attrs['NetworkSettings']['Ports']
+        host_port = None
+        for container_port, host_bindings in ports.items():
+            if container_port == '5432/tcp' and host_bindings:
+                host_port = host_bindings[0]['HostPort']
+                break
+        if not host_port:
             time.sleep(0.5)
             continue
         try:
             conn = psycopg2.connect(
-                host=ip, port=5432, database=DB_NAME,
+                host='127.0.0.1', port=host_port, database=DB_NAME,
                 user=DB_USER, password=DB_PASSWORD, connect_timeout=2
             )
             conn.close()
-            return ip
+            return '127.0.0.1', host_port
         except Exception:
             time.sleep(0.5)
     raise TimeoutError("PostgreSQL 容器启动超时")
 
-def run_sql_on_container(container_ip, sql, timeout):
+
+def run_sql_on_container(host, port, sql, timeout):
     """在容器中执行 SQL，支持多条（分号分隔），返回最后一条查询的结果集字典"""
     conn = psycopg2.connect(
-        host=container_ip, port=5432, database=DB_NAME,
+        host=host, port=port, database=DB_NAME,
         user=DB_USER, password=DB_PASSWORD, connect_timeout=timeout
     )
     conn.autocommit = True
@@ -139,12 +147,13 @@ def run_sql_on_container(container_ip, sql, timeout):
         cur.close()
         conn.close()
 
+
 def format_result_set(result: Dict) -> str:
-    """将结果集字典格式化为字符串，便于与 expected_output 比对"""
+    """将结果集字典格式化为字符串，便于展示"""
     columns = result.get("columns", [])
     rows = result.get("rows", [])
     if not columns:
-        return ""  
+        return ""
     header = "|".join(str(c) for c in columns)
     lines = [header]
     for row in rows:
@@ -152,13 +161,6 @@ def format_result_set(result: Dict) -> str:
         lines.append(line)
     return "\n".join(lines)
 
-def normalize_output(text: str) -> str:
-    """规范化输出字符串，去除首尾空白，统一换行符"""
-    return "\n".join(line.rstrip() for line in text.strip().splitlines()).strip()
-
-def compare_output(actual: str, expected: str) -> bool:
-    """比较实际输出与预期输出（忽略行首尾空格，但保留列分隔符）"""
-    return normalize_output(actual) == normalize_output(expected)
 
 def create_judge_container():
     container = docker_client.containers.run(
@@ -168,6 +170,7 @@ def create_judge_container():
             "POSTGRES_USER": DB_USER,
             "POSTGRES_PASSWORD": DB_PASSWORD
         },
+        ports={'5432/tcp': None},   # 随机映射宿主机端口
         detach=True,
         remove=True,
         tmpfs={
@@ -185,15 +188,16 @@ def create_judge_container():
     )
     return container
 
+
 @app.post("/judge", response_model=JudgeResponse)
 async def judge(request: JudgeRequest):
     container = None
     try:
         container = create_judge_container()
-        container_ip = wait_for_db(container)
+        host, port = wait_for_db(container)
 
         if request.create_table_sql and request.create_table_sql.strip():
-            run_sql_on_container(container_ip, request.create_table_sql, request.timeout)
+            run_sql_on_container(host, port, request.create_table_sql, request.timeout)
 
         details = []
         passed_count = 0
@@ -201,7 +205,7 @@ async def judge(request: JudgeRequest):
         for idx, tc in enumerate(request.test_cases):
             try:
                 with closing(psycopg2.connect(
-                    host=container_ip, port=5432, database=DB_NAME,
+                    host=host, port=port, database=DB_NAME,
                     user=DB_USER, password=DB_PASSWORD,
                     connect_timeout=request.timeout
                 )) as conn:
@@ -221,10 +225,11 @@ async def judge(request: JudgeRequest):
                             result_dict = {"columns": [], "rows": []}
                         conn.rollback()
 
-                        actual_output = format_result_set(result_dict)
+                        # 新方式：智能结果集比较
                         expected_result = parse_output_string(tc.expected_output)
                         is_pass = compare_result_sets(result_dict, expected_result)
 
+                        actual_output = format_result_set(result_dict)
                         if is_pass:
                             passed_count += 1
 
@@ -242,6 +247,8 @@ async def judge(request: JudgeRequest):
                     error_message="SQL执行超时"
                 ))
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 details.append(TestCaseResult(
                     test_case_id=idx,
                     passed=False,
@@ -268,6 +275,8 @@ async def judge(request: JudgeRequest):
             details=[]
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JudgeResponse(
             passed=False,
             execution_status="ERROR",
@@ -281,9 +290,11 @@ async def judge(request: JudgeRequest):
             except:
                 pass
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080)
