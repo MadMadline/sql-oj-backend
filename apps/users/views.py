@@ -62,17 +62,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if user.user_type == 'teacher':
             # 教师：统计自己创建的题目和考试数量
+            total_submissions = Submission.objects.count()
             return Response({
                 'username': user.username,
                 'user_type': 'teacher',
                 'questions_created': Question.objects.filter(teacher=user).count(),
                 'exams_created': Exam.objects.filter(teacher=user).count(),
+                'total_submissions': total_submissions,
             })
 
         # 学生：统计提交和通过率
         submissions = Submission.objects.filter(student=user)
         total = submissions.count()
         passed = submissions.filter(execution_status='ACCEPTED').count()
+        # 通过题目数：至少有一次 ACCEPTED 的不同题目数
+        passed_questions = submissions.filter(
+            execution_status='ACCEPTED'
+        ).values('question').distinct().count()
 
         recent = submissions.order_by('-submission_time')[:5].values(
             'id', 'question__id', 'question__title',
@@ -84,6 +90,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'user_type': user.user_type,
             'total_submissions': total,
             'passed': passed,
+            'passed_questions': passed_questions,
             'pass_rate': round(passed / total, 2) if total else 0,
             'recent_submissions': list(recent),
         })

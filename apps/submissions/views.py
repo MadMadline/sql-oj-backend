@@ -28,7 +28,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if self.request.user.user_type == 'student':
             qs = qs.filter(student=self.request.user)
         elif self.request.user.user_type == 'teacher':
-            qs = qs.filter(student__teacher=self.request.user)
+            # 教师可以看到所有学生的提交记录
+            qs = qs.filter(student__user_type='student')
         return qs
 
     @action(detail=False, methods=['post'])
@@ -100,10 +101,16 @@ class StatsViewSet(viewsets.ViewSet):
         total_questions = Question.objects.count()
         total_submissions = Submission.objects.count()
         total_users = User.objects.count()
+
+        # 计算平均通过率：所有提交中 ACCEPTED 的比例
+        total_passed = Submission.objects.filter(execution_status='ACCEPTED').count()
+        average_pass_rate = round(total_passed / total_submissions, 2) if total_submissions else 0
+
         return Response({
             'total_questions': total_questions,
             'total_submissions': total_submissions,
             'total_users': total_users,
+            'average_pass_rate': average_pass_rate,
         })
 
     @action(detail=False, methods=['get'])
@@ -114,16 +121,22 @@ class StatsViewSet(viewsets.ViewSet):
 
         stats = []
         for q in Question.objects.all():
-            total = Submission.objects.filter(question=q).count()
-            passed = Submission.objects.filter(
+            # 尝试过该题的学生数
+            attempted_students = Submission.objects.filter(
+                question=q
+            ).values('student').distinct().count()
+            # 通过该题的学生数（至少有一次 ACCEPTED）
+            passed_students = Submission.objects.filter(
                 question=q, execution_status='ACCEPTED'
-            ).count()
+            ).values('student').distinct().count()
+            total_submissions = Submission.objects.filter(question=q).count()
             stats.append({
                 'question_id': q.id,
                 'title': q.title,
-                'total_submissions': total,
-                'passed': passed,
-                'rate': round(passed / total, 2) if total else 0,
+                'total_submissions': total_submissions,
+                'attempted_students': attempted_students,
+                'passed_students': passed_students,
+                'rate': round(passed_students / attempted_students, 2) if attempted_students else 0,
             })
         return Response(stats)
 
@@ -133,18 +146,28 @@ class StatsViewSet(viewsets.ViewSet):
         if request.user.user_type != 'teacher':
             return Response({'error': '无权限'}, status=status.HTTP_403_FORBIDDEN)
 
-        students = User.objects.filter(user_type='student')
+        # 获取所有有提交记录的学生
+        from django.db.models import Exists, OuterRef
+        student_with_subs = User.objects.filter(
+            user_type='student'
+        ).filter(
+            Exists(Submission.objects.filter(student=OuterRef('pk')))
+        )
         stats = []
-        for s in students:
-            total = Submission.objects.filter(student=s).count()
-            passed = Submission.objects.filter(
-                student=s, execution_status='ACCEPTED'
-            ).count()
+        for s in student_with_subs:
+            subs = Submission.objects.filter(student=s)
+            total = subs.count()
+            passed = subs.filter(execution_status='ACCEPTED').count()
+            # 通过题目数
+            passed_questions = subs.filter(
+                execution_status='ACCEPTED'
+            ).values('question').distinct().count()
             stats.append({
                 'student_id': s.id,
                 'username': s.username,
                 'total_submissions': total,
                 'passed': passed,
+                'passed_questions': passed_questions,
                 'rate': round(passed / total, 2) if total else 0,
             })
         stats.sort(key=lambda x: x['rate'], reverse=True)
