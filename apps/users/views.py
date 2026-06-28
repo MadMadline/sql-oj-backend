@@ -6,6 +6,8 @@ from .models import User
 from .serializers import RegisterSerializer, UserSerializer
 from .permissions import IsTeacher, IsOwnerOrTeacher
 from apps.submissions.models import Submission
+from apps.questions.models import Question
+from apps.exams.models import Exam
 
 
 class RegisterView(generics.CreateAPIView):
@@ -57,6 +59,17 @@ class UserViewSet(viewsets.ModelViewSet):
     def my_stats(self, request):
         """当前用户的个人统计数据"""
         user = request.user
+
+        if user.user_type == 'teacher':
+            # 教师：统计自己创建的题目和考试数量
+            return Response({
+                'username': user.username,
+                'user_type': 'teacher',
+                'questions_created': Question.objects.filter(teacher=user).count(),
+                'exams_created': Exam.objects.filter(teacher=user).count(),
+            })
+
+        # 学生：统计提交和通过率
         submissions = Submission.objects.filter(student=user)
         total = submissions.count()
         passed = submissions.filter(execution_status='ACCEPTED').count()

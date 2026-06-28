@@ -114,14 +114,14 @@ class StatsViewSet(viewsets.ViewSet):
 
         stats = []
         for q in Question.objects.all():
-            total = Submission.objects.filter(question=q).values('student').distinct().count()
+            total = Submission.objects.filter(question=q).count()
             passed = Submission.objects.filter(
                 question=q, execution_status='ACCEPTED'
-            ).values('student').distinct().count()
+            ).count()
             stats.append({
                 'question_id': q.id,
-                'description': q.description[:50],
-                'total_attempted': total,
+                'title': q.title,
+                'total_submissions': total,
                 'passed': passed,
                 'rate': round(passed / total, 2) if total else 0,
             })
@@ -133,7 +133,7 @@ class StatsViewSet(viewsets.ViewSet):
         if request.user.user_type != 'teacher':
             return Response({'error': '无权限'}, status=status.HTTP_403_FORBIDDEN)
 
-        students = User.objects.filter(user_type='student', teacher=request.user)
+        students = User.objects.filter(user_type='student')
         stats = []
         for s in students:
             total = Submission.objects.filter(student=s).count()
