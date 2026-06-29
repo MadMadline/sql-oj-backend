@@ -1,0 +1,232 @@
+<template>
+  <div class="exam-panel" v-loading="loading">
+    <div class="exam-header">
+      <h1>{{ examInfo.title }}</h1>
+      <div class="timer" :class="{ warning: remainingSeconds < 300 }">
+        ⏰ 剩余时间：{{ formatTime(remainingSeconds) }}
+      </div>
+    </div>
+
+    <div class="exam-content">
+      <div class="questions-nav">
+        <h3>题目列表</h3>
+        <div class="question-buttons">
+          <el-button
+            v-for="(q, idx) in questions"
+            :key="q.id"
+            :type="getButtonType(idx)"
+            size="small"
+            @click="currentIndex = idx"
+          >
+            {{ idx + 1 }}
+          </el-button>
+        </div>
+      </div>
+
+      <div class="question-area">
+        <div class="question-header">
+          <h3>题目 {{ currentIndex + 1 }}</h3>
+          <span class="score">分值：{{ currentQuestion?.score || 0 }} 分</span>
+        </div>
+        <div class="description">{{ currentQuestion?.description }}</div>
+
+        <el-input
+          v-model="answers[currentQuestion?.id]"
+          type="textarea"
+          :rows="10"
+          placeholder="请输入 SQL 语句..."
+          class="sql-editor"
+        />
+
+        <div class="actions">
+          <el-button @click="prevQuestion" :disabled="currentIndex === 0">上一题</el-button>
+          <el-button type="primary" @click="nextQuestion" :disabled="currentIndex === questions.length - 1">下一题</el-button>
+          <el-button type="success" @click="submitAll">提交试卷</el-button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { startExam, submitExam } from '../../api/exams'
+import { getQuestionDetail } from '../../api/questions'
+
+const route = useRoute()
+const router = useRouter()
+const examId = computed(() => Number(route.params.id))
+
+const loading = ref(false)
+const examInfo = ref<any>({})
+const questions = ref<any[]>([])
+const answers = ref<Record<number, string>>({})
+const currentIndex = ref(0)
+const remainingSeconds = ref(0)
+let timer: any = null
+
+const currentQuestion = computed(() => questions.value[currentIndex.value])
+
+const getButtonType = (idx: number) => {
+  const q = questions.value[idx]
+  if (answers.value[q?.id]) return 'success'
+  if (idx === currentIndex.value) return 'primary'
+  return 'default'
+}
+
+const formatTime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+const prevQuestion = () => {
+  if (currentIndex.value > 0) currentIndex.value--
+}
+
+const nextQuestion = () => {
+  if (currentIndex.value < questions.value.length - 1) currentIndex.value++
+}
+
+const loadExam = async () => {
+  loading.value = true
+  try {
+    const res = await startExam(examId.value)
+    examInfo.value = res.data
+    questions.value = res.data.questions || []
+    remainingSeconds.value = res.data.remaining_seconds || 7200
+    startTimer()
+  } catch (error) {
+    ElMessage.error('加载考试失败')
+    router.push('/questions')
+  } finally {
+    loading.value = false
+  }
+}
+
+const startTimer = () => {
+  timer = setInterval(() => {
+    if (remainingSeconds.value > 0) {
+      remainingSeconds.value--
+    } else {
+      clearInterval(timer)
+      ElMessage.warning('考试时间已到，自动交卷')
+      submitAll()
+    }
+  }, 1000)
+}
+
+const submitAll = async () => {
+  ElMessageBox.confirm('确定要提交试卷吗？提交后无法修改', '提示', {
+    confirmButtonText: '确定提交',
+    cancelButtonText: '继续答题',
+    type: 'warning'
+  }).then(async () => {
+    const submissionList = Object.entries(answers.value).map(([questionId, sql]) => ({
+      question_id: Number(questionId),
+      submitted_sql: sql
+    }))
+
+    try {
+      await submitExam(examId.value, submissionList)
+      ElMessage.success('提交成功')
+      router.push('/submissions')
+    } catch (error) {
+      ElMessage.error('提交失败')
+    }
+  })
+}
+
+onMounted(() => {
+  loadExam()
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+</script>
+
+<style scoped>
+.exam-panel {
+  padding: 20px;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+.exam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.timer {
+  font-size: 24px;
+  font-weight: bold;
+  color: #409eff;
+  font-family: monospace;
+}
+.timer.warning {
+  color: #f56c6c;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.exam-content {
+  display: flex;
+  gap: 20px;
+}
+.questions-nav {
+  width: 200px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  height: fit-content;
+}
+.question-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+.question-area {
+  flex: 1;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+}
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.score {
+  color: #e6a23c;
+  font-weight: bold;
+}
+.description {
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  margin: 15px 0;
+  line-height: 1.6;
+}
+.sql-editor :deep(textarea) {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+.actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+</style>
