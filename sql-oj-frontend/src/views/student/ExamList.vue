@@ -61,6 +61,11 @@ const getExamStatus = (exam: any) => {
   const start = new Date(exam.start_time)
   const end = new Date(exam.end_time)
 
+  // ✅ 如果学生已交卷，显示“已完成”，禁止进入
+  if (exam.submitted || exam.is_completed) {
+    return { text: '已完成', type: 'success', disabled: true, buttonText: '已完成' }
+  }
+
   if (now < start) {
     return { text: '未开始', type: 'info', disabled: true, buttonText: '未开始' }
   } else if (now > end) {

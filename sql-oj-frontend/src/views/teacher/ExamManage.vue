@@ -11,14 +11,7 @@
       <el-table-column prop="start_time" label="开始时间" width="180" />
       <el-table-column prop="end_time" label="结束时间" width="180" />
       <el-table-column prop="total_score" label="总分" width="80" />
-      <el-table-column label="考生范围" width="120">
-        <template #default="{ row }">
-          <el-tag size="small" :type="row.student_scope === 'all' ? 'success' : 'warning'">
-            {{ row.student_scope === 'all' ? '所有学生' : '指定学生' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="openEditDialog(row)">编辑</el-button>
           <el-button type="primary" link @click="viewRanking(row.id)">排名</el-button>
@@ -94,36 +87,6 @@
                   :value="q.id"
                 />
               </el-select>
-            </div>
-          </div>
-        </el-form-item>
-
-        <!-- 选择学生区域 -->
-        <el-form-item label="选择学生" required>
-          <div class="student-select-area">
-            <el-radio-group v-model="examForm.student_scope" @change="onStudentScopeChange">
-              <el-radio value="all">📚 所有学生</el-radio>
-              <el-radio value="specified">👤 指定学生</el-radio>
-            </el-radio-group>
-
-            <el-select
-              v-if="examForm.student_scope === 'specific'"
-              v-model="examForm.selected_students"
-              multiple
-              filterable
-              placeholder="请选择参加考试的学生"
-              style="width: 100%; margin-top: 12px"
-              :loading="loadingStudents"
-            >
-              <el-option
-                v-for="student in allStudents"
-                :key="student.id"
-                :label="student.username + (student.email ? ' (' + student.email + ')' : '')"
-                :value="student.id"
-              />
-            </el-select>
-            <div v-if="examForm.student_scope === 'specific'" class="input-hint">
-              已选 {{ examForm.selected_students.length }} 名学生
             </div>
           </div>
         </el-form-item>
@@ -205,36 +168,6 @@
             </div>
           </div>
         </el-form-item>
-
-        <!-- 选择学生区域 -->
-        <el-form-item label="选择学生" required>
-          <div class="student-select-area">
-            <el-radio-group v-model="examForm.student_scope" @change="onStudentScopeChange">
-              <el-radio value="all">📚 所有学生</el-radio>
-              <el-radio value="specific">👤 指定学生</el-radio>
-            </el-radio-group>
-
-            <el-select
-              v-if="examForm.student_scope === 'specific'"
-              v-model="examForm.selected_students"
-              multiple
-              filterable
-              placeholder="请选择参加考试的学生"
-              style="width: 100%; margin-top: 12px"
-              :loading="loadingStudents"
-            >
-              <el-option
-                v-for="student in allStudents"
-                :key="student.id"
-                :label="student.username + (student.email ? ' (' + student.email + ')' : '')"
-                :value="student.id"
-              />
-            </el-select>
-            <div v-if="examForm.student_scope === 'specific'" class="input-hint">
-              已选 {{ examForm.selected_students.length }} 名学生
-            </div>
-          </div>
-        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -263,7 +196,6 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getExams, createExam as createExamApi, deleteExam, getExamResult, updateExam as updateExamApi } from '../../api/exams'
 import { getQuestions } from '../../api/questions'
-import { getStudents } from '../../api/users'
 
 // ===== 防死循环锁 =====
 let isLoadingExams = false
@@ -277,24 +209,19 @@ const rankVisible = ref(false)
 const editingExamId = ref<number | null>(null)
 const exams = ref<any[]>([])
 const allQuestions = ref<any[]>([])
-const allStudents = ref<any[]>([])
 const rankings = ref<any[]>([])
 const currentExamTitle = ref('')
 
-// ✅ student_scope 可选值：'all' 或 'specified'
 const examForm = ref({
   title: '',
   start_time: '',
   end_time: '',
-  total_score: 100,
-  student_scope: 'all' as 'all' | 'specified',
-  selected_students: [] as number[]
+  total_score: 100
 })
 
 const selectedQuestions = ref<{ id: number; title: string; description: string; score: number }[]>([])
 const selectedQuestionId = ref<number | null>(null)
 
-// ===== 获取题目的显示名称 =====
 const getDisplayTitle = (q: any) => {
   if (q.title) return q.title
   if (q.description) {
@@ -339,21 +266,6 @@ const loadQuestions = async () => {
   }
 }
 
-// ✅ 加载学生列表（强制过滤，只保留学生）
-const loadStudents = async () => {
-  loadingStudents.value = true
-  try {
-    const res = await getStudents()
-    const allUsers = res.data.results || res.data || []
-    allStudents.value = allUsers.filter((u: any) => u.user_type === 'student')
-    console.log('✅ 加载学生列表成功，共', allStudents.value.length, '名学生')
-  } catch (error) {
-    ElMessage.error('加载学生列表失败')
-  } finally {
-    loadingStudents.value = false
-  }
-}
-
 const addQuestion = () => {
   if (!selectedQuestionId.value) return
   const question = allQuestions.value.find(q => q.id === selectedQuestionId.value)
@@ -372,21 +284,12 @@ const removeQuestion = (id: number) => {
   selectedQuestions.value = selectedQuestions.value.filter(q => q.id !== id)
 }
 
-// ✅ 切换学生范围时清空已选
-const onStudentScopeChange = () => {
-  if (examForm.value.student_scope === 'all') {
-    examForm.value.selected_students = []
-  }
-}
-
 const resetForm = () => {
   examForm.value = {
     title: '',
     start_time: '',
     end_time: '',
-    total_score: 100,
-    student_scope: 'all',
-    selected_students: []
+    total_score: 100
   }
   selectedQuestions.value = []
 }
@@ -405,10 +308,6 @@ const createExam = async () => {
     ElMessage.warning('请至少选择一道题目')
     return
   }
-  if (examForm.value.student_scope === 'specified' && examForm.value.selected_students.length === 0) {
-    ElMessage.warning('请选择参加考试的学生')
-    return
-  }
 
   creating.value = true
   try {
@@ -420,11 +319,7 @@ const createExam = async () => {
       exam_questions: selectedQuestions.value.map(q => ({
         question: q.id,
         score: q.score
-      })),
-      student_scope: examForm.value.student_scope,
-      student_ids: examForm.value.student_scope === 'specified'
-        ? examForm.value.selected_students
-        : []
+      }))
     })
     ElMessage.success('创建成功 ✅')
     dialogVisible.value = false
@@ -443,19 +338,13 @@ const createExam = async () => {
 const openEditDialog = (exam: any) => {
   editingExamId.value = exam.id
 
-  // ✅ 回显时转换 student_scope：后端返回的 'selected' 统一转为 'specific'
-  const scope = exam.student_scope === 'selected' ? 'specified' : (exam.student_scope || 'all')
-
   examForm.value = {
     title: exam.title || '',
     start_time: exam.start_time || '',
     end_time: exam.end_time || '',
-    total_score: exam.total_score || 100,
-    student_scope: scope,
-    selected_students: exam.student_ids || []
+    total_score: exam.total_score || 100
   }
 
-  // 回显已选题目（保留标题和真实题目 ID）
   selectedQuestions.value = (exam.exam_questions || []).map((q: any) => {
     const questionId = q.question || q.id
     const fullQuestion = allQuestions.value.find(aq => aq.id === questionId)
@@ -485,33 +374,23 @@ const updateExam = async () => {
     return
   }
 
-  const requestData = {
-    title: examForm.value.title,
-    start_time: examForm.value.start_time,
-    end_time: examForm.value.end_time,
-    total_score: examForm.value.total_score,
-    exam_questions: selectedQuestions.value.map(q => ({
-      question: q.id,
-      score: q.score
-    })),
-    student_scope: examForm.value.student_scope,
-    student_ids: examForm.value.student_scope === 'specified'
-      ? examForm.value.selected_students
-      : []
-  }
-
-  console.log('📤 编辑考试请求数据:', requestData)
-
   creating.value = true
   try {
-    await updateExamApi(editingExamId.value!, requestData)
+    await updateExamApi(editingExamId.value!, {
+      title: examForm.value.title,
+      start_time: examForm.value.start_time,
+      end_time: examForm.value.end_time,
+      total_score: examForm.value.total_score,
+      exam_questions: selectedQuestions.value.map(q => ({
+        question: q.id,
+        score: q.score
+      }))
+    })
     ElMessage.success('更新成功 ✅')
     editDialogVisible.value = false
     resetForm()
     await loadExams()
   } catch (error: any) {
-    console.error('❌ 编辑考试失败:', error)
-    console.error('❌ 后端返回数据:', error.response?.data)
     const msg = error.response?.data?.error || '更新失败，请重试'
     ElMessage.error(msg)
   } finally {
@@ -525,14 +404,21 @@ const viewRanking = async (examId: number) => {
     const res = await getExamResult(examId)
     const exam = exams.value.find(e => e.id === examId)
     currentExamTitle.value = exam?.title || ''
-    const data = res.data.results || res.data || []
-
-    if (data.length === 0) {
+    const data = res.data || {}
+    
+    const rankingsList = data.details || data.results || []
+    if (rankingsList.length === 0) {
       ElMessage.info('📭 暂无学生参加此考试')
       return
     }
-
-    rankings.value = data
+    
+    rankings.value = rankingsList.map((item: any, index: number) => ({
+      rank: index + 1,
+      student_name: item.student_name || item.username || `学生 ${item.student_id}`,
+      score: item.score || 0,
+      submitted_at: item.submitted_at || '-'
+    }))
+    
     rankVisible.value = true
   } catch (error: any) {
     if (error.response?.status === 404) {
@@ -563,7 +449,6 @@ const handleDelete = (id: number) => {
 onMounted(() => {
   loadExams()
   loadQuestions()
-  loadStudents()
 })
 </script>
 
@@ -668,22 +553,6 @@ onMounted(() => {
 }
 .add-question-row .el-select {
   width: 100%;
-}
-
-.student-select-area {
-  width: 100%;
-  padding: 4px 0;
-}
-.student-select-area .el-radio-group {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 8px;
-}
-
-.input-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 6px;
 }
 
 .exam-manage :deep(.el-table) {
