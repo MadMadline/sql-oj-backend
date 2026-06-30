@@ -13,10 +13,11 @@
             <el-table-column prop="question_title" label="题目名称" min-width="150" />
             <el-table-column prop="pass_rate" label="通过率" width="120">
               <template #default="{ row }">
-                <el-progress :percentage="row.pass_rate" :stroke-width="8" />
+                <el-progress :percentage="row.pass_rate" :stroke-width="8" :show-text="true" />
               </template>
             </el-table-column>
             <el-table-column prop="passed_count" label="通过数" width="80" align="center" />
+            <el-table-column prop="attempted_count" label="提交人数" width="80" align="center" />
             <el-table-column prop="total_submissions" label="提交次数" width="80" align="center" />
           </el-table>
           <div v-if="questionStats.length === 0 && !loading" class="empty-hint">
@@ -99,6 +100,20 @@ const overview = ref({
   average_pass_rate: 0
 })
 
+// 安全解析数值（处理 null/undefined）
+const safeNumber = (val: any, defaultVal = 0): number => {
+  const num = Number(val)
+  return isNaN(num) ? defaultVal : num
+}
+
+// 将 rate 转换为百分比整数（0～100）
+const toPercent = (rate: any): number => {
+  const raw = safeNumber(rate)
+  // 如果 rate 明显大于 1，视为已百分比数值（如 75），否则视为小数（如 0.75）
+  if (raw > 1.01) return Math.round(raw)
+  return Math.round(raw * 100)
+}
+
 // ===== 加载题目通过率 =====
 const loadQuestionStats = async () => {
   loading.value = true
@@ -110,9 +125,10 @@ const loadQuestionStats = async () => {
     questionStats.value = data.map((item: any) => ({
       question_id: item.question_id || item.id,
       question_title: item.title || item.question_title || `题目 ${item.question_id || item.id}`,
-      pass_rate: item.pass_rate != null ? Math.round(item.pass_rate * 100) : 0,
-      passed_count: item.passed_students || 0,
-      total_submissions: item.total_submissions || 0
+      pass_rate: toPercent(item.rate ?? item.pass_rate),          // 主要使用 rate 字段
+      passed_count: safeNumber(item.passed_count ?? item.passed_students ?? item.passed),
+      attempted_count: safeNumber(item.attempted_students ?? item.attempted_count),  // 提交人数
+      total_submissions: safeNumber(item.total_submissions)
     }))
   } catch (error) {
     console.error('加载题目统计失败', error)
@@ -132,9 +148,9 @@ const loadStudentStats = async () => {
     studentRanking.value = data.map((item: any, index: number) => ({
       rank: index + 1,
       username: item.username || item.student_name || `用户 ${item.user_id || item.id}`,
-      pass_rate: (item.pass_rate ?? item.rate ?? 0) != null ? Math.round((item.pass_rate ?? item.rate ?? 0) * 100) : 0,
-      passed: item.passed ?? item.passed_count ?? 0,
-      total_submissions: item.total_submissions || item.submissions || 0
+      pass_rate: toPercent(item.pass_rate ?? item.rate ?? 0),
+      passed: safeNumber(item.passed ?? item.passed_count),
+      total_submissions: safeNumber(item.total_submissions ?? item.submissions)
     }))
   } catch (error) {
     console.error('加载学生排名失败', error)
@@ -150,10 +166,10 @@ const loadOverview = async () => {
     const data = res.data || {}
     const avgRate = data.average_pass_rate ?? data.avg_pass_rate ?? data.avgRate ?? 0
     overview.value = {
-      total_questions: data.total_questions || data.question_count || 0,
-      total_submissions: data.total_submissions || data.submission_count || 0,
-      total_users: data.total_users || data.user_count || 0,
-      average_pass_rate: avgRate != null ? Math.round(avgRate * 100) : 0
+      total_questions: safeNumber(data.total_questions ?? data.question_count),
+      total_submissions: safeNumber(data.total_submissions ?? data.submission_count),
+      total_users: safeNumber(data.total_users ?? data.user_count),
+      average_pass_rate: toPercent(avgRate)
     }
   } catch (error) {
     console.error('加载概览数据失败', error)
