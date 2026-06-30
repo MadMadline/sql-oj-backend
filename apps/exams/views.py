@@ -72,6 +72,9 @@ class ExamViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         exam = self.get_object()
 
+        # 允许部分更新（PUT 也不强制要求全字段，避免前端日期选择器等组件未发送未修改的字段时报错）
+        kwargs['partial'] = True
+
         # 验证题目ID
         questions_data = request.data.get('exam_questions')
         if questions_data is not None:
@@ -122,6 +125,99 @@ class ExamViewSet(viewsets.ModelViewSet):
             'total_score': exam.total_score,
             'questions': questions,
         })
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        """学生提交试卷（批量提交考试中所有题目的答案）"""
+        exam = self.get_object()
+        now = timezone.now()
+
+        # 校验考试时间
+        if now < exam.start_time:
+            return Response({'error': '考试尚未开始'}, status=status.HTTP_400_BAD_REQUEST)
+        if now > exam.end_time:
+            return Response({'error': '考试已结束'}, status=status.HTTP_400_BAD_REQUEST)
+
+        answers = request.data.get('answers', [])
+        if not answers:
+            return Response({'error': 'answers 为必填，格式: [{"question_id": 1, "submitted_sql": "..."}]'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.submissions.models import Submission
+        from apps.submissions.judge import judge_submission
+
+        results = []
+        total_score = 0
+
+        for ans in answers:
+            question_id = ans.get('question_id')
+            submitted_sql = ans.get('submitted_sql', '')
+
+            if not question_id or not submitted_sql:
+                results.append({
+                    'question_id': question_id,
+                    'error': 'question_id 和 submitted_sql 为必填',
+                    'execution_status': 'ERROR',
+                    'score': 0,
+                })
+                continue
+
+            # 获取题目
+            try:
+                question = Question.objects.prefetch_related('test_cases').get(id=question_id)
+            except Question.DoesNotExist:
+                results.append({
+                    'question_id': question_id,
+                    'error': '题目不存在',
+                    'execution_status': 'ERROR',
+                    'score': 0,
+                })
+                continue
+
+            # 获取该题在考试中的分值
+            try:
+                eq = exam.exam_questions.get(question_id=question_id)
+                question_score = eq.score
+            except ExamQuestion.DoesNotExist:
+                question_score = 0
+
+            # 调用判题服务
+            test_cases = list(question.test_cases.values('test_input', 'expected_output'))
+            result = judge_submission(
+                submitted_sql,
+                test_cases,
+                question.create_table_sql or ''
+            )
+
+            # 计算得分：ACCEPTED 得满分，否则 0
+            score = question_score if result.get('execution_status') == 'ACCEPTED' else 0
+            total_score += score
+
+            # 保存提交记录
+            submission = Submission.objects.create(
+                student=request.user,
+                question=question,
+                exam=exam,
+                submitted_sql=submitted_sql,
+                execution_status=result.get('execution_status', ''),
+                score=score,
+            )
+
+            results.append({
+                'question_id': question_id,
+                'submission_id': submission.id,
+                'execution_status': result.get('execution_status', ''),
+                'score': score,
+                'question_score': question_score,
+            })
+
+        return Response({
+            'exam_id': exam.id,
+            'exam_title': exam.title,
+            'total_score': total_score,
+            'exam_total_score': exam.total_score,
+            'results': results,
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])
     def result(self, request, pk=None):

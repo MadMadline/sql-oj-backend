@@ -24,6 +24,21 @@ class ExamSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('teacher', 'created_at', 'students')
 
+    def validate_student_scope(self, value):
+        """兑容前端可能发送的不同值，统一转为后端期望的值"""
+        alias_map = {
+            'specific': 'specified',
+            'selected': 'specified',
+            'specified': 'specified',
+            'all': 'all',
+        }
+        normalized = alias_map.get(value)
+        if normalized is None:
+            raise serializers.ValidationError(
+                f'"{value}" 不是合法的选项，可选值: all, specified'
+            )
+        return normalized
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['students'] = list(instance.students.values('id', 'username'))
