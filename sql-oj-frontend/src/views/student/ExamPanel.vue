@@ -52,9 +52,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { startExam, submitExam } from '../../api/exams'
+import { startExam } from '../../api/exams'      // 保留 startExam 导入
 import { getQuestionDetail } from '../../api/questions'
 import { marked } from 'marked'
+import request from '../../api/request'          // 直接导入 axios 实例，确保请求体格式正确
 
 // 配置 marked
 marked.setOptions({
@@ -139,7 +140,7 @@ const submitAll = async () => {
     cancelButtonText: '继续答题',
     type: 'warning'
   }).then(async () => {
-    // ✅ 构建批量提交数据
+    // ✅ 构建批量提交数据：{ question_id, submitted_sql }
     const answerList = Object.entries(answers.value).map(([questionId, sql]) => ({
       question_id: Number(questionId),
       submitted_sql: sql
@@ -151,7 +152,10 @@ const submitAll = async () => {
     }
 
     try {
-      await submitExam(examId.value, { answers: answerList })
+      // 直接使用 request 发送，避免嵌套包装
+      await request.post(`/exams/${examId.value}/submit/`, {
+        answers: answerList
+      })
       ElMessage.success('提交成功 ✅')
       router.push('/submissions')
     } catch (error: any) {
