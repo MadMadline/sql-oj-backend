@@ -103,7 +103,7 @@
           <div class="student-select-area">
             <el-radio-group v-model="examForm.student_scope" @change="onStudentScopeChange">
               <el-radio value="all">📚 所有学生</el-radio>
-              <el-radio value="specific">👤 指定学生</el-radio>
+              <el-radio value="specified">👤 指定学生</el-radio>
             </el-radio-group>
 
             <el-select
@@ -281,13 +281,13 @@ const allStudents = ref<any[]>([])
 const rankings = ref<any[]>([])
 const currentExamTitle = ref('')
 
-// ✅ student_scope 可选值：'all' 或 'specific'
+// ✅ student_scope 可选值：'all' 或 'specified'
 const examForm = ref({
   title: '',
   start_time: '',
   end_time: '',
   total_score: 100,
-  student_scope: 'all' as 'all' | 'specific',
+  student_scope: 'all' as 'all' | 'specified',
   selected_students: [] as number[]
 })
 
@@ -405,7 +405,7 @@ const createExam = async () => {
     ElMessage.warning('请至少选择一道题目')
     return
   }
-  if (examForm.value.student_scope === 'specific' && examForm.value.selected_students.length === 0) {
+  if (examForm.value.student_scope === 'specified' && examForm.value.selected_students.length === 0) {
     ElMessage.warning('请选择参加考试的学生')
     return
   }
@@ -422,7 +422,7 @@ const createExam = async () => {
         score: q.score
       })),
       student_scope: examForm.value.student_scope,
-      student_ids: examForm.value.student_scope === 'specific'
+      student_ids: examForm.value.student_scope === 'specified'
         ? examForm.value.selected_students
         : []
     })
@@ -444,7 +444,7 @@ const openEditDialog = (exam: any) => {
   editingExamId.value = exam.id
 
   // ✅ 回显时转换 student_scope：后端返回的 'selected' 统一转为 'specific'
-  const scope = exam.student_scope === 'selected' ? 'specific' : (exam.student_scope || 'all')
+  const scope = exam.student_scope === 'selected' ? 'specified' : (exam.student_scope || 'all')
 
   examForm.value = {
     title: exam.title || '',
@@ -495,7 +495,7 @@ const updateExam = async () => {
       score: q.score
     })),
     student_scope: examForm.value.student_scope,
-    student_ids: examForm.value.student_scope === 'specific'
+    student_ids: examForm.value.student_scope === 'specified'
       ? examForm.value.selected_students
       : []
   }

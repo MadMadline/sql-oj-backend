@@ -46,7 +46,6 @@
           <span>📊 个人数据</span>
         </template>
 
-        <!-- ✅ 根据身份展示不同统计 -->
         <div class="stats-grid">
           <!-- 学生统计 -->
           <template v-if="!isTeacher">
@@ -59,7 +58,7 @@
               <div class="stat-label">通过率</div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ stats.accepted_count || stats.solved_count || 0 }}</div>
+              <div class="stat-value">{{ stats.passed_questions || 0 }}</div>
               <div class="stat-label">通过题目数</div>
             </div>
           </template>
@@ -67,17 +66,17 @@
           <!-- 教师统计 -->
           <template v-if="isTeacher">
             <div class="stat-item">
-              <div class="stat-value">{{ stats.created_questions || stats.managed_questions || 0 }}</div>
+              <div class="stat-value">{{ stats.questions_created || 0 }}</div>
               <div class="stat-label">创建题目数</div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ stats.created_exams || stats.managed_exams || 0 }}</div>
+              <div class="stat-value">{{ stats.exams_created || 0 }}</div>
               <div class="stat-label">创建考试数</div>
             </div>
           </template>
         </div>
 
-        <!-- ✅ 最近提交记录（仅学生可见） -->
+        <!-- 最近提交记录（仅学生可见） -->
         <div v-if="!isTeacher" class="recent-submissions">
           <h4>📝 最近提交</h4>
           <el-table :data="recentSubmissions" v-loading="submissionsLoading" size="small">
@@ -90,7 +89,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="score" label="得分" width="60" />
-            <el-table-column prop="created_at" label="提交时间" width="160" />
+            <el-table-column prop="submission_time" label="提交时间" width="160">
+              <template #default="{ row }">
+                {{ row.submission_time || row.created_at || '-' }}
+              </template>
+            </el-table-column>
           </el-table>
           <div v-if="recentSubmissions.length === 0" class="empty-hint">
             暂无提交记录
@@ -118,15 +121,13 @@ const profileForm = ref({
   email: userStore.user?.email || ''
 })
 
+// ✅ 使用后端实际返回的字段名
 const stats = ref({
   total_submissions: 0,
   pass_rate: 0,
-  solved_count: 0,
-  accepted_count: 0,
-  created_questions: 0,
-  created_exams: 0,
-  managed_questions: 0,
-  managed_exams: 0
+  passed_questions: 0,
+  questions_created: 0,
+  exams_created: 0
 })
 
 const recentSubmissions = ref<any[]>([])
@@ -137,10 +138,18 @@ const userAvatar = computed(() => {
   return userStore.user?.avatar || ''
 })
 
+// ✅ 加载统计数据，直接映射后端字段
 const loadStats = async () => {
   try {
     const res = await getUserStats()
-    stats.value = res.data || {}
+    const data = res.data || {}
+    stats.value = {
+      total_submissions: data.total_submissions || 0,
+      pass_rate: data.pass_rate || 0,
+      passed_questions: data.passed_questions || 0,
+      questions_created: data.questions_created || 0,
+      exams_created: data.exams_created || 0
+    }
   } catch (error) {
     console.log('📊 统计数据接口暂不可用（后端未实现）')
   }

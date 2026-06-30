@@ -28,7 +28,7 @@
           <h3>题目 {{ currentIndex + 1 }}</h3>
           <span class="score">分值：{{ currentQuestion?.score || 0 }} 分</span>
         </div>
-        <div class="description">{{ currentQuestion?.description }}</div>
+        <div class="description markdown-body" v-html="renderMarkdown(currentQuestion?.description)"></div>
 
         <el-input
           v-model="answers[currentQuestion?.id]"
@@ -54,6 +54,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { startExam, submitExam } from '../../api/exams'
 import { getQuestionDetail } from '../../api/questions'
+import { marked } from 'marked'
+
+// 配置 marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  tables: true
+})
+
+// 渲染 Markdown
+const renderMarkdown = (text: string) => {
+  if (!text) return ''
+  return marked.parse(text)
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -125,17 +139,24 @@ const submitAll = async () => {
     cancelButtonText: '继续答题',
     type: 'warning'
   }).then(async () => {
-    const submissionList = Object.entries(answers.value).map(([questionId, sql]) => ({
+    // ✅ 构建批量提交数据
+    const answerList = Object.entries(answers.value).map(([questionId, sql]) => ({
       question_id: Number(questionId),
       submitted_sql: sql
     }))
 
+    if (answerList.length === 0) {
+      ElMessage.warning('请至少回答一道题')
+      return
+    }
+
     try {
-      await submitExam(examId.value, submissionList)
-      ElMessage.success('提交成功')
+      await submitExam(examId.value, { answers: answerList })
+      ElMessage.success('提交成功 ✅')
       router.push('/submissions')
-    } catch (error) {
-      ElMessage.error('提交失败')
+    } catch (error: any) {
+      const msg = error.response?.data?.error || '提交失败，请重试'
+      ElMessage.error(msg)
     }
   })
 }
